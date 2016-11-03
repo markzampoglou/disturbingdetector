@@ -68,11 +68,12 @@ public class ReportManagement {
 			File outputFolder=new File(folderOut);
 			if (!outputFolder.exists())
 				outputFolder.mkdirs();
-			File imageFile = new File (folderOut,"Raw");
+			File imageFile = new File (folderOut,"Raw_" + hash);
 			filein.transferTo(imageFile);
 
 			BufferedImage downloadedImage=ImageIO.read(imageFile);
 			ImageIO.write(downloadedImage, "JPEG", new File(folderOut , hash + ".jpg"));
+			imageFile.delete();
 			// store in database image information
 		} catch (Exception e) {
 			System.out.println("ERROR1: Something went wrong in writing the bytestream. Exiting.");

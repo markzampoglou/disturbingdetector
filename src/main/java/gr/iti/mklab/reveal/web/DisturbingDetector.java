@@ -7,6 +7,7 @@ import com.mongodb.MongoClient;
 import gr.iti.mklab.reveal.dnn.api.QueueObject;
 import gr.iti.mklab.reveal.dnn.api.ReportManagement;
 
+import gr.iti.mklab.reveal.dnn.api.logObject;
 import gr.iti.mklab.reveal.dnn.api.singleObject;
 import gr.iti.mklab.reveal.util.Configuration;
 import org.mongodb.morphia.Datastore;
@@ -20,9 +21,12 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.annotation.PreDestroy;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 
 
@@ -32,7 +36,7 @@ public class DisturbingDetector {
     private final String USER_AGENT = "Mozilla/5.0";
 
     public DisturbingDetector() throws Exception {
-        Configuration.load(getClass().getResourceAsStream("/docker.properties"));
+        Configuration.load(getClass().getResourceAsStream("/remote.properties"));
     }
 
     // Suppress MongoDB logging
@@ -164,43 +168,41 @@ public class DisturbingDetector {
 
     @RequestMapping(value = "/getfrombytearray", method = RequestMethod.POST, produces = "application/json", headers = "content-type=multipart/*", consumes = {"multipart/form-data"})
     @ResponseBody
-    public String getfrombytearray(@RequestPart(value = "bytearray", required = true) MultipartFile bytes, @RequestPart(value = "url", required = true) String url, @RequestPart(value = "collection", required = true) String collection, @RequestPart(value = "id", required = false) String itemId, @RequestPart(value = "type", required = true) String type){
+    public String getfrombytearray(@RequestPart(value = "bytearray", required = true) MultipartFile bytes, @RequestPart(value = "url", required = true) String url, @RequestPart(value = "collection", required = true) String collection, @RequestPart(value = "id", required = false) String itemId, @RequestPart(value = "type", required = true) String type) {
 
-        System.out.println("Disturbing image downloader received a byteArray. " + url + " | Collection: " + collection + " | id: " + itemId + " | type: " + type);
         MongoClient mongoclient = new MongoClient(Configuration.MONGO_HOST, 27017);
         Morphia morphia = new Morphia();
         morphia.map(QueueObject.class);
         Datastore ds = new Morphia().createDatastore(mongoclient, "DisturbingQueue");
         ds.ensureCaps();
 
-        try {
-            String imgHash = null;
-            byte[] urlBytes = (url+collection).getBytes("UTF-8");
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            md.reset();
-            md.update(urlBytes);
-            byte[] digest=md.digest();
-            imgHash = String.format("%032x", new java.math.BigInteger(1, digest));
-            System.out.println("Hash : " + imgHash);
+            try {
+                String imgHash = null;
+                byte[] urlBytes = (url + collection).getBytes("UTF-8");
+                MessageDigest md = MessageDigest.getInstance("MD5");
+                md.reset();
+                md.update(urlBytes);
+                byte[] digest = md.digest();
+                imgHash = String.format("%032x", new java.math.BigInteger(1, digest));
+                System.out.println("Disturbing image downloader received a byteArray. " + url + " | Collection: " + collection + " | id: " + itemId + " | type: " + type + " | hash : " + imgHash);
 
+                QueueObject queueItem = ds.get(QueueObject.class, imgHash);
+                if (queueItem == null) {
 
-            QueueObject queueItem = ds.get(QueueObject.class, imgHash);
-            if (queueItem == null) {
+                    try {
+                        ReportManagement.savebytearray(bytes, Configuration.QUEUE_IMAGE_PATH, imgHash);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
 
-                try {
-                    ReportManagement.savebytearray(bytes, Configuration.QUEUE_IMAGE_PATH, imgHash);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-
-                queueItem = new QueueObject();
-                queueItem.id = imgHash;
-                queueItem.processing = false;
-                queueItem.sourceURL = url;
-                queueItem.itemId = itemId;
-                queueItem.collection = collection;
-                queueItem.type = type;
-                ds.save(queueItem);
+                    queueItem = new QueueObject();
+                    queueItem.id = imgHash;
+                    queueItem.processing = false;
+                    queueItem.sourceURL = url;
+                    queueItem.itemId = itemId;
+                    queueItem.collection = collection;
+                    queueItem.type = type;
+                    ds.save(queueItem);
             /*
             URL serviceUrl = new URL("http://localhost:5000/classify_violent?imagepath=" + downloadedFilePath);
             HttpURLConnection con = (HttpURLConnection) serviceUrl.openConnection();
@@ -223,16 +225,42 @@ public class DisturbingDetector {
 
             return response.toString();
             */
+                }
+                mongoclient.close();
+                return "ok";
+
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                mongoclient.close();
+                return "failed";
             }
-            mongoclient.close();
-            return "ok";
+    }
 
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            mongoclient.close();
-            return "failed";
+
+    @RequestMapping(value = "/get_logs", method = RequestMethod.GET, produces = "application/json")
+    @ResponseBody
+    public logObject get_logs(){
+        logObject JSONResponse=new logObject();
+        String CatalinaLogPath="/opt/apache-tomcat-8.0.37/logs/catalina.out";
+        String ManagerLogPath="/logs/disturbing-detect-manager.log";
+        String PythonLogPath="/logs/disturbing-python-service.log";
+
+        byte[] catByte = new byte[0];
+        try {
+            catByte = Files.readAllBytes(Paths.get(CatalinaLogPath));
+            JSONResponse.CatalinaLog=new String(catByte);
+            byte[] managerByte = Files.readAllBytes(Paths.get(ManagerLogPath));
+            JSONResponse.ManagerLog=new String(managerByte);
+            File f= new File(PythonLogPath);
+            if (f.exists()){
+                byte[] pythonByte = Files.readAllBytes(Paths.get(PythonLogPath));
+                JSONResponse.PythonLog=new String(pythonByte);}
+            else {JSONResponse.PythonLog=new String("Not Found");}
+        } catch (IOException e) {
+            e.printStackTrace();
+            JSONResponse.ErrorLog=e.toString();
         }
-
+        return JSONResponse;
     }
     ////////////////////////////////////////////////////////
     ///////// EXCEPTION HANDLING ///////////////////////////
