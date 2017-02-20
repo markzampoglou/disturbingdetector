@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import com.google.gson.JsonObject;
 import com.mongodb.MongoClient;
+import com.mongodb.MongoClientURI;
 import gr.iti.mklab.reveal.dnn.api.QueueObject;
 import gr.iti.mklab.reveal.dnn.api.ReportManagement;
 
@@ -93,7 +94,11 @@ public class DisturbingDetector {
                 response.append(inputLine);
             }
             in.close();
-            JSONResponse.prediction=Float.valueOf(response.toString());
+
+            String[] response_split=response.toString().split(":");
+
+            JSONResponse.prediction=Float.valueOf(response_split[0]);
+            JSONResponse.prediction_nsfw=Float.valueOf(response_split[1]);
             return JSONResponse;
 
         } catch (Exception ex) {
@@ -107,7 +112,8 @@ public class DisturbingDetector {
     @ResponseBody
     public String getfromurltoqueue(@RequestParam(value = "url", required = true) String url){
         System.out.println("disturbing image detector initialized with URL");
-        MongoClient mongoclient = new MongoClient(Configuration.MONGO_HOST, 27017);
+        MongoClientURI mongoURI = new MongoClientURI(Configuration.MONGO_URI);
+        MongoClient mongoclient = new MongoClient(mongoURI);
         Morphia morphia = new Morphia();
         morphia.map(QueueObject.class);
         Datastore ds = new Morphia().createDatastore(mongoclient, "DisturbingQueue");
@@ -169,8 +175,8 @@ public class DisturbingDetector {
     @RequestMapping(value = "/getfrombytearray", method = RequestMethod.POST, produces = "application/json", headers = "content-type=multipart/*", consumes = {"multipart/form-data"})
     @ResponseBody
     public String getfrombytearray(@RequestPart(value = "bytearray", required = true) MultipartFile bytes, @RequestPart(value = "url", required = true) String url, @RequestPart(value = "collection", required = true) String collection, @RequestPart(value = "id", required = false) String itemId, @RequestPart(value = "type", required = true) String type) {
-
-        MongoClient mongoclient = new MongoClient(Configuration.MONGO_HOST, 27017);
+        MongoClientURI mongoURI = new MongoClientURI(Configuration.MONGO_URI);
+        MongoClient mongoclient = new MongoClient(mongoURI);
         Morphia morphia = new Morphia();
         morphia.map(QueueObject.class);
         Datastore ds = new Morphia().createDatastore(mongoclient, "DisturbingQueue");
@@ -249,16 +255,28 @@ public class DisturbingDetector {
         try {
             catByte = Files.readAllBytes(Paths.get(CatalinaLogPath));
             JSONResponse.CatalinaLog=new String(catByte);
+            if (JSONResponse.CatalinaLog.length()>100000){
+                JSONResponse.CatalinaLog=JSONResponse.CatalinaLog.substring(JSONResponse.CatalinaLog.length()-100000);
+            }
             byte[] managerByte = Files.readAllBytes(Paths.get(ManagerLogPath));
             JSONResponse.ManagerLog=new String(managerByte);
+            if (JSONResponse.ManagerLog.length()>100000) {
+                JSONResponse.ManagerLog = JSONResponse.ManagerLog.substring(JSONResponse.ManagerLog.length() - 100000);
+            }
             File f= new File(PythonLogPath);
-            if (f.exists()){
+            if (f.exists()) {
                 byte[] pythonByte = Files.readAllBytes(Paths.get(PythonLogPath));
-                JSONResponse.PythonLog=new String(pythonByte);}
+                JSONResponse.PythonLog = new String(pythonByte);
+                if (JSONResponse.PythonLog.length() > 100000) {
+                    JSONResponse.PythonLog = JSONResponse.PythonLog.substring(JSONResponse.PythonLog.length() - 100000);
+                }
+            }
             else {JSONResponse.PythonLog=new String("Not Found");}
         } catch (IOException e) {
             e.printStackTrace();
-            JSONResponse.ErrorLog=e.toString();
+            if (JSONResponse.ErrorLog.length() > 100000) {
+                JSONResponse.ErrorLog = JSONResponse.ErrorLog.substring(JSONResponse.ErrorLog.length() - 100000);
+            }
         }
         return JSONResponse;
     }

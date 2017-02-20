@@ -8,4 +8,5 @@ import org.mongodb.morphia.annotations.Entity;
 @Entity
 public class singleObject {
     public float prediction=-10000;
+    public float prediction_nsfw=-10000;
 }

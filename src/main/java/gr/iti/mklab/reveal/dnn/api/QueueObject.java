@@ -14,6 +14,7 @@ public class QueueObject {
     public boolean processing = false;
     public String itemId;
     public String type;
-    public double value = 10000;
+    public double value = -10000;
+    public double value_nsfw = -10000;
     public String collection;
 }
