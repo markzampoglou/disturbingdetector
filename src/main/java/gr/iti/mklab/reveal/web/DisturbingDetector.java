@@ -37,7 +37,7 @@ public class DisturbingDetector {
     private final String USER_AGENT = "Mozilla/5.0";
 
     public DisturbingDetector() throws Exception {
-        Configuration.load(getClass().getResourceAsStream("/remote.properties"));
+        Configuration.load(getClass().getResourceAsStream("/local.properties"));
     }
 
     // Suppress MongoDB logging

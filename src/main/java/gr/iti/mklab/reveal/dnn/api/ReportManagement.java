@@ -26,6 +26,8 @@ public class ReportManagement {
 		File localDir = new File(folderOut);
 		localDir.mkdir();
 
+		System.out.println(imageURL.toString());
+
 		try{
 			InputStream inputStream = null;
 			URLConnection urlConnection = null;
@@ -44,7 +46,6 @@ public class ReportManagement {
 				outputFolder.mkdirs();
 			File imageFile = new File (folderOut,hash+".raw");
 			OutputStream outputStream = new FileOutputStream(imageFile);
-
 			byteOutputStream.writeTo(outputStream);
 			outputStream.close();
 			BufferedImage downloadedImage=ImageIO.read(imageFile);
